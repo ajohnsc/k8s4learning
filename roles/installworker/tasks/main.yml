@@ -1,0 +1,16 @@
+---
+# tasks file for roles/installworker
+
+- name: add etchosts variable in /etc/hosts
+  lineinfile:
+    path: /etc/hosts
+    line: "{{ hostvars['K8S_MASTER_ETC_HOSTS']['etchosts'] }}"
+    state: present
+
+- name: add worker to cluster
+  shell: |
+    kubeadm join \
+    --token {{ hostvars['K8S_MASTER_ETC_HOSTS']['kubectltoken'] }} \
+    {{ hostvars['K8S_MASTER_ETC_HOSTS']['masterfqdn'] }}:6443 \
+    --discovery-token-ca-cert-hash \
+    sha256:{{ hostvars['K8S_MASTER_ETC_HOSTS']['discovertoken'] }}

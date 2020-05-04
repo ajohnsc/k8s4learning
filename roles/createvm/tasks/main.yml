@@ -1,0 +1,59 @@
+---
+# tasks file for roles/createvm
+- name: create "{{ disk_name }}" disk
+  gcp_compute_disk:
+    name: "{{ disk_name }}"
+    size_gb: "{{ disk_size }}"
+    source_image: 'projects/ubuntu-os-cloud/global/images/ubuntu-1804-bionic-v20200414'
+    zone: "{{ zone }}"
+    project: "{{ gcp_project }}"
+    auth_kind: "{{ gcp_cred_kind }}"
+    service_account_file: "{{ gcp_cred_file }}"
+    scopes:
+      - https://www.googleapis.com/auth/compute
+    state: present
+  register: disk
+
+- name: create "{{ vm_address_name }}" address
+  gcp_compute_address:
+    name: "{{ vm_address_name }}"
+    region: "{{ region }}"
+    project: "{{ gcp_project }}"
+    auth_kind: "{{ gcp_cred_kind }}"
+    service_account_file: "{{ gcp_cred_file }}"
+    state: present
+  register: address
+
+- name: create {{ vm_name }} instance
+  gcp_compute_instance:
+    name: "{{ vm_name }}"
+    machine_type: "{{ vm_machine_type }}"
+    disks:
+    - auto_delete: 'true'
+      boot: 'true'
+      source: "{{ disk }}"
+    network_interfaces:
+    - network: "{{ network }}"
+      access_configs:
+      - name: External NAT
+        nat_ip: "{{ address }}"
+        type: ONE_TO_ONE_NAT
+    zone: "{{ zone }}"
+    project: "{{ gcp_project }}"
+    auth_kind: "{{ gcp_cred_kind }}"
+    service_account_file: "{{ gcp_cred_file }}"
+    scopes:
+      - https://www.googleapis.com/auth/compute
+    state: present
+
+- name: Wait for SSH to come up
+  wait_for:
+    host: '{{ address.address }}'
+    port: 22
+    delay: 10
+    timeout: 60
+
+- name: Add host to "{{ vm_group }}" inventory group
+  add_host:
+    hostname: '{{ address.address }}'
+    groups: "{{ vm_group }}"

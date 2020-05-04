@@ -1,0 +1,83 @@
+---
+# tasks file for roles/installmaster
+
+- name: create variable for /etc/hosts file
+  debug:
+    msg: "{{ ansible_facts['default_ipv4']['address'] }} {{ ansible_facts['fqdn'] }}"
+  register: etchosts
+
+- name: add etchosts value to /etc/hosts
+  lineinfile:
+    path: /etc/hosts
+    state: present
+    line: "{{ etchosts.msg }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: copy kubeadm-config.yaml.j2 to /root directory
+  template:
+    src: kubeadm-config.yaml.j2
+    dest: /root/kubeadm-config.yaml
+    owner: root
+    group: root
+    mode: '0664'
+
+- name: copy modified calico.yaml to /root directory
+  copy:
+    src: calico.yaml
+    dest: /tmp/calico.yaml
+    mode: '0644'
+   
+- name: install k8s using kubadm command
+  shell: "kubeadm init --config=/root/kubeadm-config.yaml --upload-certs"
+
+- name: create configuration directory
+  file:
+    path: "{{ lookup('env','HOME') }}/.kube"
+    state: directory
+    mode: '0755'
+    owner: "{{ lookup('env','USER') }}"
+    group: "{{ lookup('env','USER') }}"
+  become: no
+
+- name: copy kubernetes configuration file
+  copy:
+    remote_src: yes
+    src: /etc/kubernetes/admin.conf
+    dest: "{{ lookup('env','HOME')  }}/.kube/config"
+    owner: "{{ lookup('env','USER') }}"
+    group: "{{ lookup('env','USER') }}"
+
+- name: Apply Calico network in kubernetes cluster
+  shell: "kubectl apply -f /tmp/calico.yaml"
+  become: no
+
+- name: Install bass-completion
+  apt:
+    name: bash-completion
+    state: present
+
+- name: add line in a file
+  lineinfile:
+    path: "{{ lookup('env','HOME') }}/.bashrc"
+    line: "source <(kubectl completion bash)"
+    state: present
+  become: no
+
+- name: create new kubectl token
+  shell: "kubeadm token create"
+  register: kubectltoken
+
+- name: create new discover token
+  shell: "openssl x509 -pubkey -in /etc/kubernetes/pki/ca.crt | openssl rsa -pubin -outform der 2>/dev/null | openssl dgst -sha256 -hex | sed 's/ˆ.* //' | awk {'print $2'}"
+  register: discovertoken
+  become: no
+
+- name: add variable holder
+  add_host:
+    name: "K8S_MASTER_ETC_HOSTS"
+    etchosts:  "{{ etchosts.msg }}"
+    discovertoken: "{{ discovertoken.stdout }}"
+    kubectltoken: "{{ kubectltoken.stdout }}"
+    masterfqdn: "{{ ansible_facts['fqdn'] }}"

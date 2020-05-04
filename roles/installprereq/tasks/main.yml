@@ -1,0 +1,42 @@
+---
+# tasks file for roles/installprereq
+
+- name: disabling swap
+  shell: "swapoff -a"
+
+- name: Update packages
+  apt:
+    update_cache: yes
+    force_apt_get: yes
+
+- name: Install docker.io and vim
+  apt:
+    name:
+      - docker.io
+      - vim
+    state: latest
+
+- name: add kubernetes repo
+  apt_repository:
+    repo: deb http://apt.kubernetes.io/ kubernetes-xenial main
+    state: present
+    filename: kubernetes.list
+    update_cache: no
+
+- name: Install google cloud gpg keys
+  apt_key:
+    url: https://packages.cloud.google.com/apt/doc/apt-key.gpg
+    state: present
+
+- name: Update packages
+  apt:
+    update_cache: yes
+    force_apt_get: yes
+
+- name: Install kubeadm kubelet and kubectl
+  apt:
+    name:
+      - kubeadm=1.18.1-00
+      - kubelet=1.18.1-00
+      - kubectl=1.18.1-00
+    state: present
